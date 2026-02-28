@@ -4,23 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEURAL-DUST | Live HQ</title>
-    <!-- Three.js + OrbitControls (Global R128 to bypass local file CORS module blocking) -->
+    <title>NEURAL-DUST | Planetary Interface</title>
+
+    <!-- Global Scripts to bypass local file CORS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- Paho MQTT JS -->
+    <!-- Paho MQTT -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;700&display=swap"
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;500;800&display=swap"
         rel="stylesheet">
+
     <style>
         :root {
-            --bg: #050505;
-            --primary: #00ffcc;
-            --warning: #ffcc00;
-            --danger: #ff3333;
-            --panel: rgba(10, 15, 20, 0.7);
-            --border: rgba(0, 255, 204, 0.2);
+            --bg: #030508;
+            --safe: #00fff5;
+            --warn: #ffea00;
+            --danger: #ff2a2a;
+            --panel-bg: rgba(5, 10, 15, 0.4);
+            --border: rgba(0, 255, 245, 0.15);
+            --font-ui: 'Share Tech Mono', monospace;
+            --font-main: 'Inter', sans-serif;
         }
 
         body {
@@ -28,7 +32,7 @@
             overflow: hidden;
             background-color: var(--bg);
             color: #fff;
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-main);
             user-select: none;
         }
 
@@ -39,9 +43,13 @@
             width: 100vw;
             height: 100vh;
             z-index: 1;
+            /* Subtle radial gradient to make the center pop */
+            background: radial-gradient(circle at center, #0a1118 0%, #030508 100%);
         }
 
-        /* Sci-Fi UI Overlays */
+        /* ----------------------------------------------------
+           SCI-FI HUD UI
+           ---------------------------------------------------- */
         .hud {
             position: absolute;
             z-index: 10;
@@ -49,68 +57,127 @@
         }
 
         .panel {
-            background: var(--panel);
-            backdrop-filter: blur(8px);
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 15px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 255, 245, 0.05);
+            position: relative;
+            overflow: hidden;
         }
 
-        /* Top Bar */
+        /* Cyberpunk Corner Accents */
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 15px;
+            height: 15px;
+            border-top: 2px solid var(--safe);
+            border-left: 2px solid var(--safe);
+            border-top-left-radius: 8px;
+        }
+
+        .panel::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 15px;
+            height: 15px;
+            border-bottom: 2px solid var(--safe);
+            border-right: 2px solid var(--safe);
+            border-bottom-right-radius: 8px;
+        }
+
+        /* --- TOP LEFT: Header --- */
         #header {
-            top: 20px;
-            left: 20px;
+            top: 30px;
+            left: 30px;
+            width: 320px;
         }
 
         #header h1 {
             margin: 0;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 24px;
-            color: var(--primary);
-            text-shadow: 0 0 10px var(--primary);
-            letter-spacing: 2px;
+            font-family: var(--font-ui);
+            font-size: 26px;
+            color: var(--safe);
+            text-shadow: 0 0 15px rgba(0, 255, 245, 0.8);
+            letter-spacing: 3px;
         }
 
         #header p {
-            margin: 5px 0 0 0;
-            font-size: 12px;
-            color: #88a;
-            text-transform: uppercase;
+            margin: 8px 0 0 0;
+            font-size: 13px;
+            color: #8da9c4;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
         }
 
         .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: #f44336;
-            margin-right: 5px;
-            box-shadow: 0 0 8px #f44336;
+            background: var(--danger);
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--danger);
+            animation: pulse 2s infinite;
         }
 
         .status-dot.active {
-            background: #4caf50;
-            box-shadow: 0 0 8px #4caf50;
+            background: var(--safe);
+            box-shadow: 0 0 10px var(--safe);
         }
 
-        /* Right Panel: Live Feed */
+        @keyframes pulse {
+            0% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.6;
+            }
+        }
+
+        #global-status-banner {
+            margin-top: 15px;
+            padding: 8px;
+            background: rgba(0, 255, 245, 0.1);
+            border-left: 3px solid var(--safe);
+            font-family: var(--font-ui);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        /* --- RIGHT: Live Feed --- */
         #live-feed {
-            top: 20px;
-            right: 20px;
-            width: 350px;
-            height: 60vh;
+            top: 30px;
+            right: 30px;
+            width: 380px;
+            height: 65vh;
             display: flex;
             flex-direction: column;
         }
 
-        #live-feed h3 {
-            margin: 0 0 10px 0;
-            font-family: 'Share Tech Mono', monospace;
+        .panel-title {
+            margin: 0 0 15px 0;
+            font-family: var(--font-ui);
             font-size: 16px;
             color: #fff;
+            letter-spacing: 2px;
+            text-transform: uppercase;
             border-bottom: 1px solid var(--border);
-            padding-bottom: 5px;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
         }
 
         #feed-content {
@@ -118,48 +185,62 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 8px;
         }
 
         .feed-item {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 11px;
-            background: rgba(0, 0, 0, 0.4);
-            border-left: 2px solid var(--primary);
-            padding: 8px;
-            animation: slideIn 0.3s ease-out;
-            color: #ccc;
+            font-family: var(--font-ui);
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.5);
+            border-left: 3px solid var(--safe);
+            padding: 10px 12px;
+            animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .feed-item.danger {
             border-left-color: var(--danger);
-            color: #ffaaaa;
         }
 
         .feed-item.warning {
-            border-left-color: var(--warning);
-            color: #ffeeaa;
+            border-left-color: var(--warn);
         }
 
         .feed-item.safe {
-            border-left-color: var(--primary);
+            border-left-color: var(--safe);
+        }
+
+        .feed-info {
+            flex-grow: 1;
+            margin-right: 15px;
         }
 
         .feed-station {
-            font-weight: bold;
+            font-weight: 800;
             color: #fff;
-            margin-bottom: 3px;
+            font-family: var(--font-main);
+            margin-bottom: 2px;
+            font-size: 14px;
         }
 
-        .feed-val {
-            float: right;
+        .feed-time {
+            color: #5a7b9c;
+            font-size: 10px;
+        }
+
+        .feed-value {
+            text-align: right;
+            font-size: 20px;
             font-weight: bold;
         }
 
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateX(20px);
+                transform: translateX(30px);
             }
 
             to {
@@ -168,109 +249,258 @@
             }
         }
 
-        /* Bottom Left: Leaderboard */
+        /* --- BOTTOM CENTER: Leaderboard --- */
         #metrics {
-            bottom: 20px;
-            left: 20px;
-            width: 300px;
-        }
-
-        #metrics h3 {
-            margin: 0 0 10px 0;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 14px;
-            color: var(--danger);
-        }
-
-        .metric-row {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
             display: flex;
-            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .metric-card {
+            flex: 1;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .metric-title {
+            font-family: var(--font-ui);
             font-size: 12px;
+            color: #8da9c4;
             margin-bottom: 5px;
-            padding: 4px 0;
-            border-bottom: 1px dotted rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+        }
+
+        .metric-val {
+            font-family: var(--font-ui);
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--safe);
+            text-shadow: 0 0 10px var(--safe);
+        }
+
+        .metric-sub {
+            font-size: 11px;
+            color: #ccc;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Controls */
         #controls-hint {
             position: absolute;
-            bottom: 20px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 12px;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-family: var(--font-ui);
+            font-size: 11px;
+            color: #4a5b6c;
+            letter-spacing: 2px;
         }
 
         /* Loading */
         #loader {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            bottom: 0;
+            width: 100%;
+            height: 100%;
             background: var(--bg);
-            z-index: 100;
+            z-index: 999;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-family: 'Share Tech Mono', monospace;
-            color: var(--primary);
-            font-size: 24px;
-            letter-spacing: 5px;
-            transition: opacity 1s;
+            transition: opacity 1s ease-out;
+        }
+
+        .loader-ring {
+            width: 60px;
+            height: 60px;
+            border: 3px solid transparent;
+            border-top-color: var(--safe);
+            border-bottom-color: var(--safe);
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .loader-text {
+            font-family: var(--font-ui);
+            color: var(--safe);
+            font-size: 20px;
+            letter-spacing: 6px;
+            text-shadow: 0 0 10px var(--safe);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <div id="loader">INITIALIZING NEURAL GRID...</div>
+    <div id="loader">
+        <div class="loader-ring"></div>
+        <div class="loader-text">INITIALIZING CORE</div>
+    </div>
 
     <div id="canvas-container"></div>
 
     <!-- UI Overlay -->
     <div id="header" class="hud panel">
-        <h1>NEURAL-DUST</h1>
-        <p><span id="conn-dot" class="status-dot"></span> <span id="conn-status">SYSTEM OFFLINE</span></p>
-    </div>
-
-    <div id="live-feed" class="hud panel">
-        <h3>>> LIVE SENSOR UPLINK</h3>
-        <div id="feed-content"></div>
-    </div>
-
-    <div id="metrics" class="hud panel">
-        <h3>CRITICAL PM2.5 ZONES (LIVE)</h3>
-        <div id="leaderboard">
-            <div style="font-size: 11px; color: #666; text-align: center; margin-top: 10px;">Awaiting telemetrics...
-            </div>
+        <h1>PLANETARY 3D</h1>
+        <p><span id="conn-dot" class="status-dot"></span> <span id="conn-status">AWAITING UPLINK...</span></p>
+        <div id="global-status-banner">
+            GLOBAL HEALTH: <span style="color:var(--safe)">NOMINAL</span>
         </div>
     </div>
 
-    <div id="controls-hint">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+    <div id="live-feed" class="hud panel">
+        <div class="panel-title">
+            <span>Live Data Stream</span>
+            <span style="color:var(--safe); font-size:12px;">● REC</span>
+        </div>
+        <div id="feed-content"></div>
+    </div>
+
+    <div id="metrics" class="hud">
+        <div class="metric-card" id="card-max">
+            <div class="metric-title">Highest PM2.5 Recorded</div>
+            <div class="metric-val" id="max-val">--</div>
+            <div class="metric-sub" id="max-loc">Scanning sectors...</div>
+        </div>
+        <div class="metric-card" id="card-avg">
+            <div class="metric-title">Network Average</div>
+            <div class="metric-val" id="avg-val">--</div>
+            <div class="metric-sub">Across all active nodes</div>
+        </div>
+        <div class="metric-card" id="card-nodes">
+            <div class="metric-title">Active Sources</div>
+            <div class="metric-val" id="nodes-val">0</div>
+            <div class="metric-sub" id="clock-display">00:00:00</div>
+        </div>
+    </div>
+
+    <div id="controls-hint">DRAG TO ROTATE | SCROLL TO ZOOM</div>
 
     <script>
-        // Use global THREE objects instead of module imports
+        // ============================================
+        // 1. DATA STATE & LOGIC
+        // ============================================
+        const stationsMap = new Map();
+
+        let globalStats = {
+            maxPm25: 0,
+            maxLoc: 'None',
+            avgPm25: 0,
+            count: 0
+        };
+
+        const THEME = {
+            safe: { hex: 0x00fff5, css: 'var(--safe)', label: 'NOMINAL' },
+            warn: { hex: 0xffea00, css: 'var(--warn)', label: 'ELEVATED' },
+            danger: { hex: 0xff2a2a, css: 'var(--danger)', label: 'HAZARDOUS' }
+        };
+
+        function getQuality(pm25) {
+            if (pm25 > 100) return THEME.danger;
+            if (pm25 > 50) return THEME.warn;
+            return THEME.safe;
+        }
+
+        // UI DOM Elements
+        const feedWrapper = document.getElementById('feed-content');
+        const maxValEl = document.getElementById('max-val');
+        const maxLocEl = document.getElementById('max-loc');
+        const avgValEl = document.getElementById('avg-val');
+        const nodesValEl = document.getElementById('nodes-val');
+        const bannerEl = document.getElementById('global-status-banner');
+
+        function updateUI(stationName, pm25, statusObj) {
+            // Update Feed
+            const el = document.createElement('div');
+            el.className = `feed-item`;
+            el.style.borderLeftColor = statusObj.css;
+
+            const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+            el.innerHTML = `
+                <div class="feed-info">
+                    <div class="feed-station">${stationName}</div>
+                    <div class="feed-time">LOG: ${timeStr}</div>
+                </div>
+                <div class="feed-value" style="color: ${statusObj.css}">${pm25}</div>
+            `;
+
+            feedWrapper.prepend(el);
+            if (feedWrapper.children.length > 8) feedWrapper.removeChild(feedWrapper.lastChild);
+
+            // Calculate Globals
+            let total = 0;
+            let highest = 0;
+            let hName = '';
+
+            stationsMap.forEach((v, k) => {
+                total += v.pm25;
+                if (v.pm25 > highest) {
+                    highest = v.pm25;
+                    hName = v.name;
+                }
+            });
+
+            globalStats.count = stationsMap.size;
+            globalStats.avgPm25 = Math.round(total / globalStats.count);
+            globalStats.maxPm25 = highest;
+            globalStats.maxLoc = hName;
+
+            // Update Metric Cards
+            maxValEl.innerText = globalStats.maxPm25;
+            maxLocEl.innerText = globalStats.maxLoc;
+            avgValEl.innerText = globalStats.avgPm25;
+            nodesValEl.innerText = globalStats.count;
+
+            const maxQ = getQuality(globalStats.maxPm25);
+            document.getElementById('card-max').style.borderColor = maxQ.css;
+            maxValEl.style.color = maxQ.css;
+            maxValEl.style.textShadow = `0 0 10px ${maxQ.css}`;
+
+            // Update Banner
+            const avgQ = getQuality(globalStats.avgPm25);
+            bannerEl.innerHTML = `NETWORK STATUS: <span style="color:${avgQ.css}; font-weight:bold;">${avgQ.label}</span>`;
+            bannerEl.style.borderLeftColor = avgQ.css;
+            bannerEl.style.background = `rgba(${avgQ === THEME.safe ? '0,255,245' : avgQ === THEME.warn ? '255,234,0' : '255,42,42'}, 0.1)`;
+        }
+
+        setInterval(() => {
+            document.getElementById('clock-display').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        // ============================================
+        // 2. THREE.JS 3D GLOBE OVERHAUL
+        // ============================================
         const OrbitControls = THREE.OrbitControls;
-
-        // ============================================
-        // 1. DATA STATE MANAGEMENT
-        // ============================================
-        const stationsMap = new Map(); // Store latest data per station
-        let highestNodes = [];
-
-        // ============================================
-        // 2. THREE.JS SETUP (THE GLOBE)
-        // ============================================
         const container = document.getElementById('canvas-container');
+
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x050505, 0.003);
+        scene.fog = new THREE.FogExp2(0x030508, 0.015);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0, 20);
+        camera.position.set(0, 5, 25);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -280,157 +510,181 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.minDistance = 5;
+        controls.minDistance = 8;
         controls.maxDistance = 50;
-        controls.autoRotate = false;
+        controls.enablePan = false;
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
-        scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
-        pointLight.position.set(10, 10, 10);
-        scene.add(pointLight);
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+        const pLight = new THREE.PointLight(0xffffff, 1, 50);
+        pLight.position.set(10, 15, 10);
+        scene.add(pLight);
 
-        // GLOBE
-        const geo = new THREE.IcosahedronGeometry(4, 2);
-        const mat = new THREE.MeshPhongMaterial({
-            color: 0x00ffcc,
+        // --- THE GLOBE ---
+        // Outer Wireframe
+        const globeGeo = new THREE.IcosahedronGeometry(6, 3);
+        const globeMat = new THREE.MeshPhongMaterial({
+            color: THEME.safe.hex,
             wireframe: true,
             transparent: true,
-            opacity: 0.3
+            opacity: 0.25,
+            emissive: THEME.safe.hex,
+            emissiveIntensity: 0.2
         });
-        const globe = new THREE.Mesh(geo, mat);
+        const globe = new THREE.Mesh(globeGeo, globeMat);
         scene.add(globe);
 
-        const innerGeo = new THREE.IcosahedronGeometry(2, 1);
-        const innerMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
-        const innerGlobe = new THREE.Mesh(innerGeo, innerMat);
+        // Inner Solid Core
+        const coreGeo = new THREE.IcosahedronGeometry(5.8, 2);
+        const coreMat = new THREE.MeshPhongMaterial({
+            color: 0x050a10,
+            flatShading: true,
+            transparent: true,
+            opacity: 0.9
+        });
+        const innerGlobe = new THREE.Mesh(coreGeo, coreMat);
         globe.add(innerGlobe);
 
-        // PARTICLES
-        const pCount = 2000;
+        // Inner Glowing Heart
+        const heartGeo = new THREE.IcosahedronGeometry(2, 1);
+        const heartMat = new THREE.MeshBasicMaterial({
+            color: THEME.safe.hex,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.6
+        });
+        const heart = new THREE.Mesh(heartGeo, heartMat);
+        globe.add(heart);
+
+        // --- PARTICLES ---
+        const pCount = 3000;
         const pGeo = new THREE.BufferGeometry();
         const pPos = new Float32Array(pCount * 3);
-        for (let i = 0; i < pCount * 3; i++) {
-            pPos[i] = (Math.random() - 0.5) * 50;
+        const pSpeeds = new Float32Array(pCount);
+
+        for (let i = 0; i < pCount; i++) {
+            // Random points in a sphere shell
+            const r = 8 + Math.random() * 20;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+
+            pPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            pPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            pPos[i * 3 + 2] = r * Math.cos(phi);
+
+            pSpeeds[i] = 0.01 + Math.random() * 0.03;
         }
+
         pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-        const pMat = new THREE.PointsMaterial({ color: 0x00ffcc, size: 0.05, transparent: true, opacity: 0.5 });
+        pGeo.setAttribute('speed', new THREE.BufferAttribute(pSpeeds, 1));
+
+        const stringColor = new THREE.Color(THEME.safe.hex);
+        const pMat = new THREE.PointsMaterial({
+            color: stringColor,
+            size: 0.08,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending
+        });
         const particles = new THREE.Points(pGeo, pMat);
         scene.add(particles);
 
-        let latestPm25 = 0;
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-        // ============================================
-        // 3. UI DOM LOGIC
-        // ============================================
-        const feedContainer = document.getElementById('feed-content');
-        const leaderboardContainer = document.getElementById('leaderboard');
+        // Current Target Colors for Lerping
+        let currentGlobeColor = new THREE.Color(THEME.safe.hex);
+        let targetGlobeColor = new THREE.Color(THEME.safe.hex);
 
-        function updateLiveFeed(stationName, pm25, pm10, status) {
-            const el = document.createElement('div');
-            el.className = `feed-item ${status}`;
+        function animate() {
+            requestAnimationFrame(animate);
 
-            let time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
+            controls.update();
 
-            el.innerHTML = `
-                <div class="feed-station">${stationName}</div>
-                <div>PM2.5: <span class="feed-val">${pm25}</span></div>
-                <div>PM10:  <span class="feed-val" style="color:#aaa">${pm10}</span></div>
-                <div style="color:#666; font-size:9px; margin-top:4px;">[RCV: ${time}]</div>
-            `;
+            // Rotations
+            globe.rotation.y += 0.002;
+            globe.rotation.x += 0.001;
+            heart.rotation.y -= 0.005;
+            heart.rotation.z -= 0.003;
+            particles.rotation.y -= 0.001;
 
-            feedContainer.prepend(el);
-            // Cap at 15 items
-            if (feedContainer.children.length > 15) {
-                feedContainer.removeChild(feedContainer.lastChild);
-            }
+            // Breathing / Pulsing Effect based on Highest PM2.5
+            const baseScale = 1;
+            const pmScaleFactor = Math.min(globalStats.maxPm25 / 150, 1.0); // Normalize 0-1
+
+            // Heart beats faster if danger
+            const beatSpeed = 0.002 + (pmScaleFactor * 0.01);
+            const pulse = Math.sin(Date.now() * beatSpeed) * (0.05 + pmScaleFactor * 0.1);
+
+            const targetScale = baseScale + (pmScaleFactor * 0.2) + pulse;
+
+            globe.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+
+            // Color Lerping
+            targetGlobeColor.setHex(getQuality(globalStats.maxPm25).hex);
+            currentGlobeColor.lerp(targetGlobeColor, 0.05);
+
+            globeMat.color.copy(currentGlobeColor);
+            globeMat.emissive.copy(currentGlobeColor);
+            heartMat.color.copy(currentGlobeColor);
+            pMat.color.copy(currentGlobeColor);
+
+            renderer.render(scene, camera);
         }
 
-        function updateLeaderboard() {
-            // Sort map by pm25 descending
-            const sorted = Array.from(stationsMap.values()).sort((a, b) => b.pm25 - a.pm25).slice(0, 5);
-
-            leaderboardContainer.innerHTML = '';
-            sorted.forEach((data, index) => {
-                let color = '#00ffcc';
-                if (data.pm25 > 50) color = '#ffcc00';
-                if (data.pm25 > 100) color = '#ff3333';
-
-                const row = document.createElement('div');
-                row.className = 'metric-row';
-                row.innerHTML = `
-                    <span style="width: 20px; color: ${color}">0${index + 1}</span>
-                    <span style="flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">${data.name}</span>
-                    <span style="font-weight:bold; font-family:'Share Tech Mono'; color: ${color}">${data.pm25}</span>
-                `;
-                leaderboardContainer.appendChild(row);
-            });
-        }
+        animate();
 
         // ============================================
-        // 4. MQTT WEBSOCKETS LOGIC
+        // 3. MQTT CONNECTIVITY
         // ============================================
         const statusDot = document.getElementById('conn-dot');
         const statusText = document.getElementById('conn-status');
+        const loader = document.getElementById('loader');
 
         const host = "dustboy-wss-bridge.laris.workers.dev";
         const port = 443;
         const topic = "DUSTBOY/+/+/+/status";
-        const clientId = "NEURAL-" + Math.random().toString(16).substr(2, 8);
+        const clientId = "PLANETARY-" + Math.random().toString(16).substr(2, 8);
 
         const mqttClient = new Paho.MQTT.Client(host, port, "/mqtt", clientId);
 
         mqttClient.onConnectionLost = (resp) => {
             statusDot.classList.remove('active');
-            statusText.innerText = "LINK SEVERED. RECONNECTING...";
-            statusText.style.color = "#f44336";
-
-            // Auto reconnect after 5s
+            statusDot.style.background = 'var(--danger)';
+            statusDot.style.boxShadow = '0 0 10px var(--danger)';
+            statusText.innerText = "UPLINK SEVERED. RECONNECTING...";
+            statusText.style.color = "var(--danger)";
             setTimeout(startMQTT, 5000);
         };
 
         mqttClient.onMessageArrived = (msg) => {
             try {
-                // Parse payload string -> JSON
                 const payload = JSON.parse(msg.payloadString);
 
-                // Dustboy Payload shape:
-                // { source_id: 111, source_name: "Name", pm25: 12.5, pm10: 20.1, ... }
-                const v_pm25 = Math.round(parseFloat(payload.pm25) || 0);
-                const v_pm10 = Math.round(parseFloat(payload.pm10) || 0);
-                const nameTh = payload.source_name || "UNKNOWN SECTOR";
-                const stationId = payload.source_id || msg.destinationName.split('/')[3];
+                const v_pm25 = Math.round(parseFloat(payload.pm25) || parseFloat(payload.pm2_5) || 0);
+                const nameTh = payload.source_name || payload.nickname || payload.myName || "UNKNOWN SECTOR";
+                // Determine ID properly based on payload structure or topic
+                const stationId = payload.source_id || payload.id || msg.destinationName.split('/')[3];
 
-                if (v_pm25 <= 0 && v_pm10 <= 0) return; // Skip invalid hollow data
+                if (v_pm25 <= 0 || v_pm25 > 1000) return; // Filter bad data
 
-                // Filter out massive noise anomalies
-                if (v_pm25 > 1000) return;
+                stationsMap.set(stationId, { name: nameTh, pm25: v_pm25 });
 
-                // 1. Save to Map
-                stationsMap.set(stationId, { name: nameTh, pm25: v_pm25, pm10: v_pm10 });
-
-                // 2. Update Global Max PM2.5 for the Globe
-                let maxPm = 0;
-                stationsMap.forEach(s => { if (s.pm25 > maxPm) maxPm = s.pm25; });
-                latestPm25 = maxPm;
-
-                let status = 'safe';
-                if (v_pm25 > 50) status = 'warning';
-                if (v_pm25 > 100) status = 'danger';
-
-                // 3. UI Update
-                updateLiveFeed(nameTh, v_pm25, v_pm10, status);
-                updateLeaderboard();
+                const quality = getQuality(v_pm25);
+                updateUI(nameTh, v_pm25, quality);
 
             } catch (e) {
-                console.error("Payload Parse Error: ", e);
+                console.error("Payload Parse Error", e);
             }
         };
 
         function startMQTT() {
-            statusText.innerText = "ESTABLISHING UPLINK...";
-            statusText.style.color = "#ffcc00";
+            statusText.innerText = "ESTABLISHING SECURE UPLINK...";
+            statusText.style.color = "var(--warn)";
 
             mqttClient.connect({
                 timeout: 10,
@@ -438,67 +692,27 @@
                 cleanSession: true,
                 onSuccess: () => {
                     statusDot.classList.add('active');
-                    statusText.innerText = "UPLINK ESTABLISHED";
-                    statusText.style.color = "#00ffcc";
+                    statusDot.style.background = 'var(--safe)';
+                    statusDot.style.boxShadow = '0 0 10px var(--safe)';
+                    statusText.innerText = "UPLINK SECURED. STREAMING.";
+                    statusText.style.color = "var(--safe)";
+
                     mqttClient.subscribe(topic);
 
-                    // Hide Loader
-                    document.getElementById('loader').style.opacity = '0';
-                    setTimeout(() => document.getElementById('loader').style.display = 'none', 1000);
+                    // Fade out loader
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 1000);
                 },
                 onFailure: (err) => {
-                    statusText.innerText = "UPLINK FAILED. RETRYING...";
-                    statusText.style.color = "#f44336";
+                    statusText.innerText = "UPLINK FAILED. RETRYING.";
+                    statusText.style.color = "var(--danger)";
                     setTimeout(startMQTT, 5000);
                 }
             });
         }
 
-        // ============================================
-        // 5. ANIMATION LOOP
-        // ============================================
-        const colorScale = {
-            safe: new THREE.Color(0x00ffcc),
-            warn: new THREE.Color(0xffcc00),
-            danger: new THREE.Color(0xff3333)
-        };
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            controls.update();
-
-            // Rotate Globe and Particles
-            globe.rotation.y += 0.005;
-            globe.rotation.x += 0.002;
-            particles.rotation.y -= 0.001;
-
-            // Scale based on highest network PM2.5
-            const scale = 1 + (latestPm25 / 100) * 0.5 + Math.sin(Date.now() * 0.002) * 0.05;
-            const finalScale = Math.min(scale, 3.0); // Clamp to prevent massive overlaps
-            globe.scale.set(finalScale, finalScale, finalScale);
-
-            // Interpolate colors smoothly
-            let targetColor = colorScale.safe;
-            if (latestPm25 > 50) targetColor = colorScale.warn;
-            if (latestPm25 > 100) targetColor = colorScale.danger;
-
-            globe.material.color.lerp(targetColor, 0.05);
-            innerGlobe.material.color.lerp(targetColor, 0.05);
-            particles.material.color.lerp(targetColor, 0.05);
-
-            renderer.render(scene, camera);
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Start
-        animate();
-        startMQTT();
+        // Start connection
+        setTimeout(startMQTT, 500);
 
     </script>
 </body>
