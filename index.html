@@ -270,112 +270,63 @@
         let highestNodes = [];
 
         // ============================================
-        // 2. THREE.JS SETUP (THE GRID)
+        // 2. THREE.JS SETUP (THE GLOBE)
         // ============================================
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x050505, 0.003);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 150, 250);
+        camera.position.set(0, 0, 20);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        // Post processing glowing effects could be added here, but sticking to core Three.js for simplicity
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.maxPolarAngle = Math.PI / 2 - 0.05; // Don't go below ground
-        controls.minDistance = 20;
-        controls.maxDistance = 500;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.5;
+        controls.minDistance = 5;
+        controls.maxDistance = 50;
+        controls.autoRotate = false;
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
         scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+        pointLight.position.set(10, 10, 10);
+        scene.add(pointLight);
 
-        // Core Environment: Cyber Grid
-        const gridHelper = new THREE.GridHelper(800, 100, 0x00ffcc, 0x113333);
-        gridHelper.position.y = 0;
-        // Fade out grid in distance via material
-        gridHelper.material.transparent = true;
-        gridHelper.material.opacity = 0.4;
-        scene.add(gridHelper);
+        // GLOBE
+        const geo = new THREE.IcosahedronGeometry(4, 2);
+        const mat = new THREE.MeshPhongMaterial({
+            color: 0x00ffcc,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.3
+        });
+        const globe = new THREE.Mesh(geo, mat);
+        scene.add(globe);
 
-        // Central "Core"
-        const coreGeo = new THREE.TorusGeometry(30, 0.5, 16, 100);
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.2, wireframe: true });
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        core.rotation.x = Math.PI / 2;
-        scene.add(core);
+        const innerGeo = new THREE.IcosahedronGeometry(2, 1);
+        const innerMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+        const innerGlobe = new THREE.Mesh(innerGeo, innerMat);
+        globe.add(innerGlobe);
 
-        const coreGeo2 = new THREE.TorusGeometry(50, 0.5, 16, 100);
-        const core2 = new THREE.Mesh(coreGeo2, coreMat);
-        core2.rotation.x = Math.PI / 2;
-        scene.add(core2);
-
-        // 3D Object Groups
-        const nodesGroup = new THREE.Group();
-        scene.add(nodesGroup);
-
-        const particlesGroup = new THREE.Group();
-        scene.add(particlesGroup);
-
-        // Map stations to 3D positions (pseudo-random based on station ID hash to keep them static)
-        function getHashPosition(str) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            // Distribute around center (-250 to 250)
-            const x = (Math.sin(hash) * 200);
-            const z = (Math.cos(hash) * 200);
-            return { x, z };
+        // PARTICLES
+        const pCount = 2000;
+        const pGeo = new THREE.BufferGeometry();
+        const pPos = new Float32Array(pCount * 3);
+        for (let i = 0; i < pCount * 3; i++) {
+            pPos[i] = (Math.random() - 0.5) * 50;
         }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        const pMat = new THREE.PointsMaterial({ color: 0x00ffcc, size: 0.05, transparent: true, opacity: 0.5 });
+        const particles = new THREE.Points(pGeo, pMat);
+        scene.add(particles);
 
-        // Object Factory for Data Nodes
-        const geometryNode = new THREE.CylinderGeometry(0, 2, 10, 4);
-        const geometryRing = new THREE.RingGeometry(3, 4, 16);
-
-        function createDataNode(stationId, pm25) {
-            let color = 0x00ffcc; // Safe
-            let status = 'safe';
-            if (pm25 > 50) { color = 0xffcc00; status = 'warning'; }
-            if (pm25 > 100) { color = 0xff3333; status = 'danger'; }
-
-            const pos = getHashPosition(stationId);
-            const height = Math.min(pm25, 150) / 2 + 5; // Scale height by AQI
-
-            const group = new THREE.Group();
-            group.position.set(pos.x, 0, pos.z);
-            group.userData = { id: stationId, pm25: pm25 };
-
-            // Pillar
-            const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: false });
-            // Add slight transparency to pillar
-            mat.transparent = true; mat.opacity = 0.8;
-
-            const pGeo = new THREE.CylinderGeometry(1, 1, height, 8);
-            const pillar = new THREE.Mesh(pGeo, mat);
-            pillar.position.y = height / 2;
-            group.add(pillar);
-
-            // Ground Ring
-            const rMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-            const ring = new THREE.Mesh(geometryRing, rMat);
-            ring.rotation.x = Math.PI / 2;
-            ring.position.y = 0.1;
-            group.add(ring);
-
-            // Light
-            const pointLight = new THREE.PointLight(color, 1, 30);
-            pointLight.position.y = height;
-            group.add(pointLight);
-
-            return { group, color, status, height };
-        }
+        let latestPm25 = 0;
 
         // ============================================
         // 3. UI DOM LOGIC
@@ -466,23 +417,17 @@
                 // 1. Save to Map
                 stationsMap.set(stationId, { name: nameTh, pm25: v_pm25, pm10: v_pm10 });
 
-                // 2. 3D Scene Update
-                // Remove existing node if exists
-                const existing = nodesGroup.children.find(c => c.userData.id === stationId);
-                if (existing) {
-                    nodesGroup.remove(existing);
-                    // Dispose old geometries/materials memory management omitted for brevity in a short demo
-                }
+                // 2. Update Global Max PM2.5 for the Globe
+                let maxPm = 0;
+                stationsMap.forEach(s => { if (s.pm25 > maxPm) maxPm = s.pm25; });
+                latestPm25 = maxPm;
 
-                // Add new Node
-                const nodeData = createDataNode(stationId, v_pm25);
-                nodesGroup.add(nodeData.group);
-
-                // Add Particle Pulse effect
-                spawnPulseEffect(nodeData.group.position, nodeData.color, nodeData.height);
+                let status = 'safe';
+                if (v_pm25 > 50) status = 'warning';
+                if (v_pm25 > 100) status = 'danger';
 
                 // 3. UI Update
-                updateLiveFeed(nameTh, v_pm25, v_pm10, nodeData.status);
+                updateLiveFeed(nameTh, v_pm25, v_pm10, status);
                 updateLeaderboard();
 
             } catch (e) {
@@ -519,57 +464,35 @@
         // ============================================
         // 5. ANIMATION LOOP
         // ============================================
-        const clock = new THREE.Clock();
-
-        function spawnPulseEffect(pos, colorHex, limitHeight) {
-            // A ring that floats upward and fades
-            const geo = new THREE.RingGeometry(2, 2.5, 16);
-            const mat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 1 });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.rotation.x = Math.PI / 2;
-            mesh.position.copy(pos);
-            mesh.position.y = 0.5;
-
-            // Custom data for animation
-            mesh.userData = { speed: 10 + Math.random() * 10, limit: limitHeight };
-            particlesGroup.add(mesh);
-        }
+        const colorScale = {
+            safe: new THREE.Color(0x00ffcc),
+            warn: new THREE.Color(0xffcc00),
+            danger: new THREE.Color(0xff3333)
+        };
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
 
             controls.update();
 
-            // Rotate core elements
-            core.rotation.z -= 0.2 * delta;
-            core2.rotation.z += 0.1 * delta;
+            // Rotate Globe and Particles
+            globe.rotation.y += 0.005;
+            globe.rotation.x += 0.002;
+            particles.rotation.y -= 0.001;
 
-            // Animate nodes pulsing (slight scaling)
-            const time = Date.now() * 0.003;
-            nodesGroup.children.forEach(node => {
-                // node is the group, node.children[0] is the cylinder
-                if (node.children[0]) {
-                    // Slight breathing effect
-                    const scale = 1.0 + Math.sin(time + node.position.x) * 0.05;
-                    node.children[0].scale.set(1, scale, 1);
-                }
-            });
+            // Scale based on highest network PM2.5
+            const scale = 1 + (latestPm25 / 100) * 0.5 + Math.sin(Date.now() * 0.002) * 0.05;
+            const finalScale = Math.min(scale, 3.0); // Clamp to prevent massive overlaps
+            globe.scale.set(finalScale, finalScale, finalScale);
 
-            // Animate Particles
-            for (let i = particlesGroup.children.length - 1; i >= 0; i--) {
-                const p = particlesGroup.children[i];
-                p.position.y += p.userData.speed * delta;
-                p.material.opacity -= 0.5 * delta;
-                p.scale.x += 1 * delta;
-                p.scale.y += 1 * delta;
+            // Interpolate colors smoothly
+            let targetColor = colorScale.safe;
+            if (latestPm25 > 50) targetColor = colorScale.warn;
+            if (latestPm25 > 100) targetColor = colorScale.danger;
 
-                if (p.material.opacity <= 0 || p.position.y > p.userData.limit) {
-                    particlesGroup.remove(p);
-                    p.geometry.dispose();
-                    p.material.dispose();
-                }
-            }
+            globe.material.color.lerp(targetColor, 0.05);
+            innerGlobe.material.color.lerp(targetColor, 0.05);
+            particles.material.color.lerp(targetColor, 0.05);
 
             renderer.render(scene, camera);
         }
