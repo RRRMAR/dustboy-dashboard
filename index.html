@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL-DUST | Live HQ</title>
+    <!-- Three.js from CDN -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <!-- Paho MQTT JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050505;
+            --primary: #00ffcc;
+            --warning: #ffcc00;
+            --danger: #ff3333;
+            --panel: rgba(10, 15, 20, 0.7);
+            --border: rgba(0, 255, 204, 0.2);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Sci-Fi UI Overlays */
+        .hud {
+            position: absolute;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: var(--panel);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 15px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Top Bar */
+        #header {
+            top: 20px;
+            left: 20px;
+        }
+
+        #header h1 {
+            margin: 0;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 24px;
+            color: var(--primary);
+            text-shadow: 0 0 10px var(--primary);
+            letter-spacing: 2px;
+        }
+
+        #header p {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+            color: #88a;
+            text-transform: uppercase;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f44336;
+            margin-right: 5px;
+            box-shadow: 0 0 8px #f44336;
+        }
+
+        .status-dot.active {
+            background: #4caf50;
+            box-shadow: 0 0 8px #4caf50;
+        }
+
+        /* Right Panel: Live Feed */
+        #live-feed {
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            height: 60vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #live-feed h3 {
+            margin: 0 0 10px 0;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            color: #fff;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 5px;
+        }
+
+        #feed-content {
+            flex-grow: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .feed-item {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 2px solid var(--primary);
+            padding: 8px;
+            animation: slideIn 0.3s ease-out;
+            color: #ccc;
+        }
+
+        .feed-item.danger {
+            border-left-color: var(--danger);
+            color: #ffaaaa;
+        }
+
+        .feed-item.warning {
+            border-left-color: var(--warning);
+            color: #ffeeaa;
+        }
+
+        .feed-item.safe {
+            border-left-color: var(--primary);
+        }
+
+        .feed-station {
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+
+        .feed-val {
+            float: right;
+            font-weight: bold;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Bottom Left: Leaderboard */
+        #metrics {
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+        }
+
+        #metrics h3 {
+            margin: 0 0 10px 0;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            color: var(--danger);
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 5px;
+            padding: 4px 0;
+            border-bottom: 1px dotted rgba(255, 255, 255, 0.1);
+        }
+
+        /* Controls */
+        #controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Loading */
+        #loader {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--primary);
+            font-size: 24px;
+            letter-spacing: 5px;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loader">INITIALIZING NEURAL GRID...</div>
+
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div id="header" class="hud panel">
+        <h1>NEURAL-DUST</h1>
+        <p><span id="conn-dot" class="status-dot"></span> <span id="conn-status">SYSTEM OFFLINE</span></p>
+    </div>
+
+    <div id="live-feed" class="hud panel">
+        <h3>>> LIVE SENSOR UPLINK</h3>
+        <div id="feed-content"></div>
+    </div>
+
+    <div id="metrics" class="hud panel">
+        <h3>CRITICAL PM2.5 ZONES (LIVE)</h3>
+        <div id="leaderboard">
+            <div style="font-size: 11px; color: #666; text-align: center; margin-top: 10px;">Awaiting telemetrics...
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-hint">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ============================================
+        // 1. DATA STATE MANAGEMENT
+        // ============================================
+        const stationsMap = new Map(); // Store latest data per station
+        let highestNodes = [];
+
+        // ============================================
+        // 2. THREE.JS SETUP (THE GRID)
+        // ============================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.003);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 150, 250);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // Post processing glowing effects could be added here, but sticking to core Three.js for simplicity
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05; // Don't go below ground
+        controls.minDistance = 20;
+        controls.maxDistance = 500;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        // Core Environment: Cyber Grid
+        const gridHelper = new THREE.GridHelper(800, 100, 0x00ffcc, 0x113333);
+        gridHelper.position.y = 0;
+        // Fade out grid in distance via material
+        gridHelper.material.transparent = true;
+        gridHelper.material.opacity = 0.4;
+        scene.add(gridHelper);
+
+        // Central "Core"
+        const coreGeo = new THREE.TorusGeometry(30, 0.5, 16, 100);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.2, wireframe: true });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.rotation.x = Math.PI / 2;
+        scene.add(core);
+
+        const coreGeo2 = new THREE.TorusGeometry(50, 0.5, 16, 100);
+        const core2 = new THREE.Mesh(coreGeo2, coreMat);
+        core2.rotation.x = Math.PI / 2;
+        scene.add(core2);
+
+        // 3D Object Groups
+        const nodesGroup = new THREE.Group();
+        scene.add(nodesGroup);
+
+        const particlesGroup = new THREE.Group();
+        scene.add(particlesGroup);
+
+        // Map stations to 3D positions (pseudo-random based on station ID hash to keep them static)
+        function getHashPosition(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            // Distribute around center (-250 to 250)
+            const x = (Math.sin(hash) * 200);
+            const z = (Math.cos(hash) * 200);
+            return { x, z };
+        }
+
+        // Object Factory for Data Nodes
+        const geometryNode = new THREE.CylinderGeometry(0, 2, 10, 4);
+        const geometryRing = new THREE.RingGeometry(3, 4, 16);
+
+        function createDataNode(stationId, pm25) {
+            let color = 0x00ffcc; // Safe
+            let status = 'safe';
+            if (pm25 > 50) { color = 0xffcc00; status = 'warning'; }
+            if (pm25 > 100) { color = 0xff3333; status = 'danger'; }
+
+            const pos = getHashPosition(stationId);
+            const height = Math.min(pm25, 150) / 2 + 5; // Scale height by AQI
+
+            const group = new THREE.Group();
+            group.position.set(pos.x, 0, pos.z);
+            group.userData = { id: stationId, pm25: pm25 };
+
+            // Pillar
+            const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: false });
+            // Add slight transparency to pillar
+            mat.transparent = true; mat.opacity = 0.8;
+
+            const pGeo = new THREE.CylinderGeometry(1, 1, height, 8);
+            const pillar = new THREE.Mesh(pGeo, mat);
+            pillar.position.y = height / 2;
+            group.add(pillar);
+
+            // Ground Ring
+            const rMat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            const ring = new THREE.Mesh(geometryRing, rMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.1;
+            group.add(ring);
+
+            // Light
+            const pointLight = new THREE.PointLight(color, 1, 30);
+            pointLight.position.y = height;
+            group.add(pointLight);
+
+            return { group, color, status, height };
+        }
+
+        // ============================================
+        // 3. UI DOM LOGIC
+        // ============================================
+        const feedContainer = document.getElementById('feed-content');
+        const leaderboardContainer = document.getElementById('leaderboard');
+
+        function updateLiveFeed(stationName, pm25, pm10, status) {
+            const el = document.createElement('div');
+            el.className = `feed-item ${status}`;
+
+            let time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
+
+            el.innerHTML = `
+                <div class="feed-station">${stationName}</div>
+                <div>PM2.5: <span class="feed-val">${pm25}</span></div>
+                <div>PM10:  <span class="feed-val" style="color:#aaa">${pm10}</span></div>
+                <div style="color:#666; font-size:9px; margin-top:4px;">[RCV: ${time}]</div>
+            `;
+
+            feedContainer.prepend(el);
+            // Cap at 15 items
+            if (feedContainer.children.length > 15) {
+                feedContainer.removeChild(feedContainer.lastChild);
+            }
+        }
+
+        function updateLeaderboard() {
+            // Sort map by pm25 descending
+            const sorted = Array.from(stationsMap.values()).sort((a, b) => b.pm25 - a.pm25).slice(0, 5);
+
+            leaderboardContainer.innerHTML = '';
+            sorted.forEach((data, index) => {
+                let color = '#00ffcc';
+                if (data.pm25 > 50) color = '#ffcc00';
+                if (data.pm25 > 100) color = '#ff3333';
+
+                const row = document.createElement('div');
+                row.className = 'metric-row';
+                row.innerHTML = `
+                    <span style="width: 20px; color: ${color}">0${index + 1}</span>
+                    <span style="flex-grow:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">${data.name}</span>
+                    <span style="font-weight:bold; font-family:'Share Tech Mono'; color: ${color}">${data.pm25}</span>
+                `;
+                leaderboardContainer.appendChild(row);
+            });
+        }
+
+        // ============================================
+        // 4. MQTT WEBSOCKETS LOGIC
+        // ============================================
+        const statusDot = document.getElementById('conn-dot');
+        const statusText = document.getElementById('conn-status');
+
+        const host = "dustboy-wss-bridge.laris.workers.dev";
+        const port = 443;
+        const topic = "DUSTBOY/+/+/+/status";
+        const clientId = "NEURAL-" + Math.random().toString(16).substr(2, 8);
+
+        const mqttClient = new Paho.MQTT.Client(host, port, "/mqtt", clientId);
+
+        mqttClient.onConnectionLost = (resp) => {
+            statusDot.classList.remove('active');
+            statusText.innerText = "LINK SEVERED. RECONNECTING...";
+            statusText.style.color = "#f44336";
+
+            // Auto reconnect after 5s
+            setTimeout(startMQTT, 5000);
+        };
+
+        mqttClient.onMessageArrived = (msg) => {
+            try {
+                // Parse payload string -> JSON
+                const payload = JSON.parse(msg.payloadString);
+
+                // Dustboy Payload shape:
+                // { source_id: 111, source_name: "Name", pm25: 12.5, pm10: 20.1, ... }
+                const v_pm25 = Math.round(parseFloat(payload.pm25) || 0);
+                const v_pm10 = Math.round(parseFloat(payload.pm10) || 0);
+                const nameTh = payload.source_name || "UNKNOWN SECTOR";
+                const stationId = payload.source_id || msg.destinationName.split('/')[3];
+
+                if (v_pm25 <= 0 && v_pm10 <= 0) return; // Skip invalid hollow data
+
+                // Filter out massive noise anomalies
+                if (v_pm25 > 1000) return;
+
+                // 1. Save to Map
+                stationsMap.set(stationId, { name: nameTh, pm25: v_pm25, pm10: v_pm10 });
+
+                // 2. 3D Scene Update
+                // Remove existing node if exists
+                const existing = nodesGroup.children.find(c => c.userData.id === stationId);
+                if (existing) {
+                    nodesGroup.remove(existing);
+                    // Dispose old geometries/materials memory management omitted for brevity in a short demo
+                }
+
+                // Add new Node
+                const nodeData = createDataNode(stationId, v_pm25);
+                nodesGroup.add(nodeData.group);
+
+                // Add Particle Pulse effect
+                spawnPulseEffect(nodeData.group.position, nodeData.color, nodeData.height);
+
+                // 3. UI Update
+                updateLiveFeed(nameTh, v_pm25, v_pm10, nodeData.status);
+                updateLeaderboard();
+
+            } catch (e) {
+                console.error("Payload Parse Error: ", e);
+            }
+        };
+
+        function startMQTT() {
+            statusText.innerText = "ESTABLISHING UPLINK...";
+            statusText.style.color = "#ffcc00";
+
+            mqttClient.connect({
+                timeout: 10,
+                useSSL: true,
+                cleanSession: true,
+                onSuccess: () => {
+                    statusDot.classList.add('active');
+                    statusText.innerText = "UPLINK ESTABLISHED";
+                    statusText.style.color = "#00ffcc";
+                    mqttClient.subscribe(topic);
+
+                    // Hide Loader
+                    document.getElementById('loader').style.opacity = '0';
+                    setTimeout(() => document.getElementById('loader').style.display = 'none', 1000);
+                },
+                onFailure: (err) => {
+                    statusText.innerText = "UPLINK FAILED. RETRYING...";
+                    statusText.style.color = "#f44336";
+                    setTimeout(startMQTT, 5000);
+                }
+            });
+        }
+
+        // ============================================
+        // 5. ANIMATION LOOP
+        // ============================================
+        const clock = new THREE.Clock();
+
+        function spawnPulseEffect(pos, colorHex, limitHeight) {
+            // A ring that floats upward and fades
+            const geo = new THREE.RingGeometry(2, 2.5, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 1 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = Math.PI / 2;
+            mesh.position.copy(pos);
+            mesh.position.y = 0.5;
+
+            // Custom data for animation
+            mesh.userData = { speed: 10 + Math.random() * 10, limit: limitHeight };
+            particlesGroup.add(mesh);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            controls.update();
+
+            // Rotate core elements
+            core.rotation.z -= 0.2 * delta;
+            core2.rotation.z += 0.1 * delta;
+
+            // Animate nodes pulsing (slight scaling)
+            const time = Date.now() * 0.003;
+            nodesGroup.children.forEach(node => {
+                // node is the group, node.children[0] is the cylinder
+                if (node.children[0]) {
+                    // Slight breathing effect
+                    const scale = 1.0 + Math.sin(time + node.position.x) * 0.05;
+                    node.children[0].scale.set(1, scale, 1);
+                }
+            });
+
+            // Animate Particles
+            for (let i = particlesGroup.children.length - 1; i >= 0; i--) {
+                const p = particlesGroup.children[i];
+                p.position.y += p.userData.speed * delta;
+                p.material.opacity -= 0.5 * delta;
+                p.scale.x += 1 * delta;
+                p.scale.y += 1 * delta;
+
+                if (p.material.opacity <= 0 || p.position.y > p.userData.limit) {
+                    particlesGroup.remove(p);
+                    p.geometry.dispose();
+                    p.material.dispose();
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start
+        animate();
+        startMQTT();
+
+    </script>
+</body>
+
+</html>
