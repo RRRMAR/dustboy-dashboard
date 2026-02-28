@@ -3,337 +3,424 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEURAL-DUST | Planetary Interface (API Sync)</title>
-
-    <!-- Global Scripts to bypass local file CORS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;500;800&display=swap"
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dustboy Neural Core | PM2.5 Visualization</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap"
         rel="stylesheet">
 
     <style>
         :root {
-            --bg: #030508;
-            --safe: #00fff5;
-            --warn: #ffea00;
-            --danger: #ff2a2a;
-            --panel-bg: rgba(5, 10, 15, 0.4);
-            --border: rgba(0, 255, 245, 0.15);
-            --font-ui: 'Share Tech Mono', monospace;
-            --font-main: 'Inter', sans-serif;
+            /* Neon color palette matching AQI */
+            --aqi-good: #00e676;
+            /* 0-50 */
+            --aqi-moderate: #ffea00;
+            /* 51-100 */
+            --aqi-sensitive: #ff9100;
+            /* 101-150 */
+            --aqi-unhealthy: #ff1744;
+            /* 151-200 */
+            --aqi-very-unhealthy: #d500f9;
+            /* 201-300 */
+            --aqi-hazardous: #880e4f;
+            /* 300+ */
+
+            --bg-color: #05050a;
+            --panel-bg: rgba(10, 15, 25, 0.6);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.6);
+
+            --current-aqi-color: var(--aqi-good);
+            /* Dynamically updated */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Rajdhani', sans-serif;
             overflow: hidden;
-            background-color: var(--bg);
-            color: #fff;
-            font-family: var(--font-main);
-            user-select: none;
+            /* Prevent scrolling, 3D scene takes full screen */
+            touch-action: none;
         }
 
-        #canvas-container {
+        /* 3D Canvas Container */
+        #webgl-container {
             position: absolute;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
             z-index: 1;
-            /* Subtle radial gradient to make the center pop */
-            background: radial-gradient(circle at center, #0a1118 0%, #030508 100%);
         }
 
-        /* ----------------------------------------------------
-           SCI-FI HUD UI
-           ---------------------------------------------------- */
-        .hud {
-            position: absolute;
-            z-index: 10;
-            pointer-events: none;
-        }
-
-        .panel {
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 255, 245, 0.05);
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Cyberpunk Corner Accents */
-        .panel::before {
-            content: '';
+        /* Glassmorphism UI Overlay */
+        #ui-layer {
             position: absolute;
             top: 0;
             left: 0;
-            width: 15px;
-            height: 15px;
-            border-top: 2px solid var(--safe);
-            border-left: 2px solid var(--safe);
-            border-top-left-radius: 8px;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10;
+            pointer-events: none;
+            /* Let clicks pass through to 3D scene where needed */
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            grid-template-rows: auto 1fr;
+            padding: 2rem;
+            gap: 2rem;
         }
 
-        .panel::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 15px;
-            height: 15px;
-            border-bottom: 2px solid var(--safe);
-            border-right: 2px solid var(--safe);
-            border-bottom-right-radius: 8px;
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            pointer-events: auto;
+            /* Re-enable clicks for panels */
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: border-color 0.5s ease, box-shadow 0.5s ease;
         }
 
-        /* --- TOP LEFT: Header --- */
-        #header {
-            top: 30px;
-            left: 30px;
-            width: 320px;
+        /* Dynamic glow based on AQI */
+        .glass-panel.glow {
+            border-color: rgba(var(--current-aqi-color-rgb), 0.3);
+            box-shadow: 0 0 20px rgba(var(--current-aqi-color-rgb), 0.1) inset,
+                0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
-        #header h1 {
-            margin: 0;
-            font-family: var(--font-ui);
-            font-size: 26px;
-            color: var(--safe);
-            text-shadow: 0 0 15px rgba(0, 255, 245, 0.8);
-            letter-spacing: 3px;
-        }
-
-        #header p {
-            margin: 8px 0 0 0;
-            font-size: 13px;
-            color: #8da9c4;
-            font-weight: 500;
+        /* Header / Core Stats (Top Left) */
+        header {
+            grid-column: 1 / 2;
+            grid-row: 1 / 2;
             display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .global-stat {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: var(--current-aqi-color);
+            text-shadow: 0 0 20px var(--current-aqi-color);
+            transition: color 1s ease, text-shadow 1s ease;
+        }
+
+        .stat-label {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            border-left: 2px solid var(--current-aqi-color);
+            padding-left: 10px;
+            transition: border-color 1s ease;
+        }
+
+        /* Status Graph / Info (Bottom Left) */
+        .status-panel {
+            grid-column: 1 / 2;
+            grid-row: 2 / 3;
+            align-self: end;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 40vh;
+        }
+
+        .legend-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        .aqi-scale {
+            display: flex;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .aqi-scale>div {
+            flex: 1;
+        }
+
+        .aqi-scale .g {
+            background: var(--aqi-good);
+        }
+
+        .aqi-scale .m {
+            background: var(--aqi-moderate);
+        }
+
+        .aqi-scale .s {
+            background: var(--aqi-sensitive);
+        }
+
+        .aqi-scale .u {
+            background: var(--aqi-unhealthy);
+        }
+
+        .aqi-scale .v {
+            background: var(--aqi-very-unhealthy);
+        }
+
+        .aqi-scale .h {
+            background: var(--aqi-hazardous);
+        }
+
+        .sys-status {
+            display: flex;
+            justify-content: space-between;
             align-items: center;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--current-aqi-color);
             border-radius: 50%;
-            background: var(--danger);
-            margin-right: 8px;
-            box-shadow: 0 0 10px var(--danger);
+            display: inline-block;
+            box-shadow: 0 0 10px var(--current-aqi-color);
             animation: pulse 2s infinite;
-        }
-
-        .status-dot.active {
-            background: var(--safe);
-            box-shadow: 0 0 10px var(--safe);
         }
 
         @keyframes pulse {
             0% {
-                opacity: 0.6;
+                transform: scale(0.95);
+                opacity: 0.5;
             }
 
             50% {
+                transform: scale(1.2);
                 opacity: 1;
             }
 
             100% {
-                opacity: 0.6;
+                transform: scale(0.95);
+                opacity: 0.5;
             }
         }
 
-        #global-status-banner {
-            margin-top: 15px;
-            padding: 8px;
-            background: rgba(0, 255, 245, 0.1);
-            border-left: 3px solid var(--safe);
-            font-family: var(--font-ui);
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        /* --- RIGHT: Live Feed --- */
-        #live-feed {
-            top: 30px;
-            right: 30px;
-            width: 380px;
-            height: 65vh;
+        /* Location List (Right Side) */
+        .locations-panel {
+            grid-column: 3 / 4;
+            grid-row: 1 / 3;
             display: flex;
             flex-direction: column;
-        }
-
-        .panel-title {
-            margin: 0 0 15px 0;
-            font-family: var(--font-ui);
-            font-size: 16px;
-            color: #fff;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        #feed-content {
-            flex-grow: 1;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            max-height: calc(100vh - 4rem);
         }
 
-        .feed-item {
-            font-family: var(--font-ui);
-            font-size: 13px;
-            background: rgba(0, 0, 0, 0.5);
-            border-left: 3px solid var(--safe);
-            padding: 10px 12px;
-            animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            color: #e0e0e0;
+        .panel-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--panel-border);
         }
 
-        .feed-info {
-            flex-grow: 1;
-            margin-right: 15px;
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
         }
 
-        .feed-station {
-            font-weight: 800;
+        .sort-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .sort-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
             color: #fff;
-            font-family: var(--font-main);
-            margin-bottom: 2px;
-            font-size: 14px;
         }
 
-        .feed-time {
-            color: #5a7b9c;
-            font-size: 10px;
-        }
-
-        .feed-value {
-            text-align: right;
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        /* --- BOTTOM CENTER: Leaderboard --- */
-        #metrics {
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 600px;
+        .stations-list {
+            overflow-y: auto;
+            padding-right: 0.5rem;
             display: flex;
-            gap: 15px;
+            flex-direction: column;
+            gap: 0.5rem;
         }
 
-        .metric-card {
-            flex: 1;
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--border);
+        /* Custom Scrollbar for list */
+        .stations-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .stations-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .stations-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .station-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-            transition: all 0.3s;
+            border-left: 3px solid #333;
+            /* Color updated via JS */
+            transition: background 0.2s, transform 0.2s;
+            cursor: pointer;
         }
 
-        .metric-title {
-            font-family: var(--font-ui);
-            font-size: 12px;
-            color: #8da9c4;
-            margin-bottom: 5px;
-            text-transform: uppercase;
+        .station-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(-4px);
         }
 
-        .metric-val {
-            font-family: var(--font-ui);
-            font-size: 28px;
-            font-weight: bold;
-            color: var(--safe);
-            text-shadow: 0 0 10px var(--safe);
+        .st-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
-        .metric-sub {
-            font-size: 11px;
-            color: #ccc;
-            margin-top: 3px;
+        .st-name {
+            font-weight: 600;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 180px;
         }
 
-        /* Controls */
-        #controls-hint {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-family: var(--font-ui);
-            font-size: 11px;
-            color: #4a5b6c;
-            letter-spacing: 2px;
+        .st-prov {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
-        /* Loading */
+        .st-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-align: right;
+            min-width: 50px;
+        }
+
+        /* Loading Overlay */
         #loader {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--bg);
-            z-index: 999;
+            width: 100vw;
+            height: 100vh;
+            background: var(--bg-color);
+            z-index: 100;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            transition: opacity 1s ease-out;
+            font-family: 'Orbitron', sans-serif;
+            transition: opacity 1s ease;
         }
 
         .loader-ring {
-            width: 60px;
-            height: 60px;
-            border: 3px solid transparent;
-            border-top-color: var(--safe);
-            border-bottom-color: var(--safe);
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid var(--aqi-good);
             border-radius: 50%;
-            animation: spin 1.5s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        .loader-text {
-            font-family: var(--font-ui);
-            color: var(--safe);
-            font-size: 20px;
-            letter-spacing: 6px;
-            text-shadow: 0 0 10px var(--safe);
-            animation: pulse 1.5s infinite;
+            animation: spin 1s linear infinite;
+            margin-bottom: 2rem;
         }
 
         @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
             100% {
                 transform: rotate(360deg);
+            }
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 1024px) {
+            #ui-layer {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr;
+                gap: 1rem;
+                padding: 1rem;
+                overflow-y: auto;
+                pointer-events: auto;
+                /* Allow scrolling UI on mobile */
+            }
+
+            #webgl-container {
+                position: fixed;
+                /* Keep background fixed */
+            }
+
+            header,
+            .status-panel {
+                grid-column: 1 / -1;
+                max-height: none;
+            }
+
+            .status-panel {
+                grid-row: 3;
+            }
+
+            .locations-panel {
+                grid-column: 1 / -1;
+                grid-row: 2;
+                max-height: 40vh;
             }
         }
     </style>
@@ -341,348 +428,539 @@
 
 <body>
 
+    <!-- Loading Screen -->
     <div id="loader">
         <div class="loader-ring"></div>
-        <div class="loader-text">INITIALIZING CORE (REST API)</div>
+        <div id="loader-text">INITIALIZING NEURAL DATALINK...</div>
     </div>
 
-    <div id="canvas-container"></div>
+    <!-- WebGL Canvas replaces this div -->
+    <div id="webgl-container"></div>
 
     <!-- UI Overlay -->
-    <div id="header" class="hud panel">
-        <h1>PLANETARY 3D</h1>
-        <p><span id="conn-dot" class="status-dot"></span> <span id="conn-status">AWAITING UPLINK...</span></p>
-        <div id="global-status-banner">
-            GLOBAL HEALTH: <span style="color:var(--safe)">NOMINAL</span>
-        </div>
-    </div>
+    <div id="ui-layer">
 
-    <div id="live-feed" class="hud panel">
-        <div class="panel-title">
-            <span>Critical Node Radar</span>
-            <span style="color:var(--safe); font-size:12px;">● LIVE</span>
-        </div>
-        <div id="feed-content"></div>
-    </div>
+        <!-- Top Left: Main Stats -->
+        <header class="glass-panel glow">
+            <h1>Dustboy Core</h1>
+            <div class="subtitle">National Real-time PM2.5 Network</div>
 
-    <div id="metrics" class="hud">
-        <div class="metric-card" id="card-max">
-            <div class="metric-title">Highest PM2.5 Recorded</div>
-            <div class="metric-val" id="max-val">--</div>
-            <div class="metric-sub" id="max-loc">Scanning sectors...</div>
-        </div>
-        <div class="metric-card" id="card-avg">
-            <div class="metric-title">Network Average</div>
-            <div class="metric-val" id="avg-val">--</div>
-            <div class="metric-sub">Across all active nodes</div>
-        </div>
-        <div class="metric-card" id="card-nodes">
-            <div class="metric-title">Active Sources</div>
-            <div class="metric-val" id="nodes-val">0</div>
-            <div class="metric-sub" id="clock-display">00:00:00</div>
-        </div>
-    </div>
-
-    <div id="controls-hint">DRAG TO ROTATE | SCROLL TO ZOOM</div>
-
-    <script>
-        // ============================================
-        // 1. DATA STATE & LOGIC
-        // ============================================
-        const stationsMap = new Map();
-
-        let globalStats = {
-            maxPm25: 0,
-            maxLoc: 'None',
-            avgPm25: 0,
-            count: 0
-        };
-
-        const THEME = {
-            safe: { hex: 0x00fff5, css: 'var(--safe)', label: 'NOMINAL' },
-            warn: { hex: 0xffea00, css: 'var(--warn)', label: 'ELEVATED' },
-            danger: { hex: 0xff2a2a, css: 'var(--danger)', label: 'HAZARDOUS' }
-        };
-
-        function getQuality(pm25) {
-            if (pm25 > 100) return THEME.danger;
-            if (pm25 > 50) return THEME.warn;
-            return THEME.safe;
-        }
-
-        // UI DOM Elements
-        const feedWrapper = document.getElementById('feed-content');
-        const maxValEl = document.getElementById('max-val');
-        const maxLocEl = document.getElementById('max-loc');
-        const avgValEl = document.getElementById('avg-val');
-        const nodesValEl = document.getElementById('nodes-val');
-        const bannerEl = document.getElementById('global-status-banner');
-
-        function appendFeedItem(stationName, pm25, statusObj) {
-            const el = document.createElement('div');
-            el.className = `feed-item`;
-            el.style.borderLeftColor = statusObj.css;
-
-            const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
-
-            el.innerHTML = `
-                <div class="feed-info">
-                    <div class="feed-station">${stationName}</div>
-                    <div class="feed-time">LOG: ${timeStr}</div>
+            <div style="margin-top: 1.5rem;">
+                <div class="stat-label">AVERAGE PM2.5 (µg/m³)</div>
+                <div class="global-stat">
+                    <div class="stat-value" id="avg-pm25">--</div>
                 </div>
-                <div class="feed-value" style="color: ${statusObj.css}">${pm25}</div>
-            `;
+                <div class="subtitle" id="air-quality-desc" style="margin-top: 0.5rem; font-weight: 600;">Detecting...
+                </div>
+            </div>
+        </header>
 
-            feedWrapper.appendChild(el);
+        <!-- Bottom Left: Metadata & Scale -->
+        <div class="status-panel glass-panel">
+            <div>
+                <div class="legend-title">PM2.5 HEALTH INDEX</div>
+                <div class="aqi-scale">
+                    <div class="g" title="Good (0-25)"></div>
+                    <div class="m" title="Moderate (26-37)"></div>
+                    <div class="s" title="Sensitive (38-50)"></div>
+                    <div class="u" title="Unhealthy (51-90)"></div>
+                    <div class="v" title="Very Unhealthy (91-150)"></div>
+                    <div class="h" title="Hazardous (151+)"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size: 0.75rem; color: var(--text-muted);">
+                    <span>Good</span>
+                    <span>Hazardous</span>
+                </div>
+            </div>
+
+            <div class="sys-status">
+                <div><span class="pulse-dot" style="margin-right: 8px;"></span>LIVE FEED</div>
+                <div id="last-update">SYS.TIME --:--:--</div>
+            </div>
+        </div>
+
+        <!-- Right Side: Station Feed -->
+        <div class="locations-panel glass-panel">
+            <div class="panel-header">
+                <div class="panel-title">SENSOR NETWORK (<span id="total-sensors">0</span>)</div>
+                <button class="sort-btn" id="sort-toggle">SORT: HIGHEST</button>
+            </div>
+
+            <div class="stations-list" id="stations-container">
+                <!-- JS will populate list here -->
+                <div style="text-align:center; padding: 2rem; color: var(--text-muted);">Fetching nodes...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Import Maps for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ==========================================================
+        // CONFIG & STATE
+        // ==========================================================
+        const API_URL = 'https://open-api.cmuccdc.org/aqic/dustboy';
+
+        const COLORS = {
+            GOOD: { hex: '#00e676', rgb: '0, 230, 118', limit: 25, desc: 'GOOD' },
+            MODERATE: { hex: '#ffea00', rgb: '255, 234, 0', limit: 37, desc: 'MODERATE' },
+            SENSITIVE: { hex: '#ff9100', rgb: '255, 145, 0', limit: 50, desc: 'SENSITIVE' },
+            UNHEALTHY: { hex: '#ff1744', rgb: '255, 23, 68', limit: 90, desc: 'UNHEALTHY' },
+            VERY_UNHEALTHY: { hex: '#d500f9', rgb: '213, 0, 249', limit: 150, desc: 'VERY UNHEALTHY' },
+            HAZARDOUS: { hex: '#880e4f', rgb: '136, 14, 79', limit: 9999, desc: 'HAZARDOUS' }
+        };
+
+        let appState = {
+            stations: [],
+            avgPm25: 0,
+            maxPm25: 0,
+            currentAqiCategory: COLORS.GOOD,
+            sortDesc: true,
+            // Math targets for smooth transitions (KlakMath inspired)
+            targetDeformation: 0,
+            currentDeformation: 0,
+            deformationVelocity: 0
+        };
+
+        // ==========================================================
+        // MATHEMATICS (Inspired by Keijiro's KlakMath)
+        // ==========================================================
+        // Critically Damped Spring function for ultra-smooth physical tweening
+        // Modifies 'current' and 'velocity' in place, returns new 'current'
+        function stepCds(current, target, velocityObj, duration, deltaTime) {
+            const omega = 2.0 / duration;
+            const x = omega * deltaTime;
+            const exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+            const change = current - target;
+            const temp = (velocityObj.v + omega * change) * deltaTime;
+            velocityObj.v = (velocityObj.v - omega * temp) * exp;
+            return target + (change + temp) * exp;
         }
 
-        setInterval(() => {
-            document.getElementById('clock-display').innerText = new Date().toLocaleTimeString();
-        }, 1000);
+        function getAqiCategory(pm25) {
+            if (pm25 <= COLORS.GOOD.limit) return COLORS.GOOD;
+            if (pm25 <= COLORS.MODERATE.limit) return COLORS.MODERATE;
+            if (pm25 <= COLORS.SENSITIVE.limit) return COLORS.SENSITIVE;
+            if (pm25 <= COLORS.UNHEALTHY.limit) return COLORS.UNHEALTHY;
+            if (pm25 <= COLORS.VERY_UNHEALTHY.limit) return COLORS.VERY_UNHEALTHY;
+            return COLORS.HAZARDOUS;
+        }
 
-        // ============================================
-        // 2. THREE.JS 3D GLOBE OVERHAUL
-        // ============================================
-        const OrbitControls = THREE.OrbitControls;
-        const container = document.getElementById('canvas-container');
-
+        // ==========================================================
+        // 3D SCENE SETUP (Morphing Organism/Core)
+        // ==========================================================
+        const container = document.getElementById('webgl-container');
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x030508, 0.015);
+        scene.fog = new THREE.FogExp2(0x05050a, 0.05);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 25);
+        camera.position.set(0, 0, 15);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.minDistance = 8;
-        controls.maxDistance = 50;
         controls.enablePan = false;
+        controls.minDistance = 5;
+        controls.maxDistance = 25;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 1.0;
 
-        // Lights
-        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-        const pLight = new THREE.PointLight(0xffffff, 1, 50);
-        pLight.position.set(10, 15, 10);
-        scene.add(pLight);
+        // --- Post-Processing (Bloom) ---
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 1.5; // Will be modulated by data
+        bloomPass.radius = 0.5;
 
-        // --- THE GLOBE ---
-        // Outer Wireframe
-        const globeGeo = new THREE.IcosahedronGeometry(6, 3);
-        const globeMat = new THREE.MeshPhongMaterial({
-            color: THEME.safe.hex,
-            wireframe: true,
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- Morphing "Neural Core" Mesh Data ---
+        // Instead of traditional skinning which requires bones, we use a custom shader 
+        // that acts like a morphological skin driven by noise, simulating an organic breathing core.
+
+        const coreGeometry = new THREE.IcosahedronGeometry(4, 64); // High res for displacement
+
+        // Custom Shader Material mimicking skinning/morphing via noise displacement
+        const coreMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uColor: { value: new THREE.Color(COLORS.GOOD.hex) },
+                uDeformationAmount: { value: 0.0 }, // Dictated by PM2.5 severity
+                uPulseSpeed: { value: 1.0 }
+            },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uDeformationAmount;
+                uniform float uPulseSpeed;
+                
+                varying vec2 vUv;
+                varying float vElevation;
+                varying vec3 vNormal;
+
+                // Classic 3D Perlin Noise snippet
+                vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+                vec2 fade(vec2 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
+                float cnoise(vec3 P){
+                  vec3 Pi0 = floor(P); vec3 Pi1 = Pi0 + vec3(1.0);
+                  Pi0 = mod(Pi0, 289.0); Pi1 = mod(Pi1, 289.0);
+                  vec3 Pf0 = fract(P); vec3 Pf1 = Pf0 - vec3(1.0);
+                  vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+                  vec4 iy = vec4(Pi0.yy, Pi1.yy);
+                  vec4 iz0 = Pi0.zzzz; vec4 iz1 = Pi1.zzzz;
+                  vec4 ixy = permute(permute(ix) + iy);
+                  vec4 ixy0 = permute(ixy + iz0); vec4 ixy1 = permute(ixy + iz1);
+                  vec4 gx0 = ixy0 / 7.0; vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
+                  gx0 = fract(gx0); vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+                  vec4 sz0 = step(gz0, vec4(0.0));
+                  gx0 -= sz0 * (step(0.0, gx0) - 0.5); gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+                  vec4 gx1 = ixy1 / 7.0; vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
+                  gx1 = fract(gx1); vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+                  vec4 sz1 = step(gz1, vec4(0.0));
+                  gx1 -= sz1 * (step(0.0, gx1) - 0.5); gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+                  vec3 g000 = vec3(gx0.x,gy0.x,gz0.x); vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+                  vec3 g010 = vec3(gx0.z,gy0.z,gz0.z); vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+                  vec3 g001 = vec3(gx1.x,gy1.x,gz1.x); vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+                  vec3 g011 = vec3(gx1.z,gy1.z,gz1.z); vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+                  vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+                  g000 *= norm0.x; g010 *= norm0.y; g100 *= norm0.z; g110 *= norm0.w;
+                  vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+                  g001 *= norm1.x; g011 *= norm1.y; g101 *= norm1.z; g111 *= norm1.w;
+                  float n000 = dot(g000, Pf0); float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+                  float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z)); float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+                  float n001 = dot(g001, vec3(Pf0.xy, Pf1.z)); float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+                  float n011 = dot(g011, vec3(Pf0.x, Pf1.yz)); float n111 = dot(g111, Pf1);
+                  vec3 fade_xyz = fade(Pf0);
+                  vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+                  vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+                  float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
+                  return 2.2 * n_xyz;
+                }
+                vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+
+                void main() {
+                    vUv = uv;
+                    vNormal = normal;
+                    
+                    // Organic breathing/morphing effect
+                    float noiseRaw = cnoise(position * 0.8 + uTime * uPulseSpeed * 0.5);
+                    
+                    // Breathing pulse
+                    float pulse = sin(uTime * uPulseSpeed) * 0.5 + 0.5;
+                    
+                    // Combine noise and pulse based on deformation amount
+                    float elevation = (noiseRaw * 0.5) * uDeformationAmount;
+                    elevation += pulse * uDeformationAmount * 0.2; // expansion
+                    
+                    vElevation = elevation;
+                    
+                    vec3 newPosition = position + normal * elevation;
+                    
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uColor;
+                uniform float uTime;
+                
+                varying vec2 vUv;
+                varying float vElevation;
+                varying vec3 vNormal;
+
+                void main() {
+                    // Base color mixed with black based on normals for faux-shading
+                    float intensity = dot(vNormal, vec3(0.0, 0.0, 1.0));
+                    vec3 color = mix(uColor * 0.3, uColor * 1.5, intensity);
+                    
+                    // Highlight the deformed areas
+                    color = mix(color, vec3(1.0), vElevation * 0.5);
+                    
+                    // Add scanning line effect for cyberpunk feel
+                    float scanline = sin(vUv.y * 50.0 - uTime * 2.0) * 0.04;
+                    color += scanline;
+                    
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            `,
+            wireframe: true, // Cyberpunk aesthetic
             transparent: true,
-            opacity: 0.25,
-            emissive: THEME.safe.hex,
-            emissiveIntensity: 0.2
+            opacity: 0.8
         });
-        const globe = new THREE.Mesh(globeGeo, globeMat);
-        scene.add(globe);
 
-        // Inner Solid Core
-        const coreGeo = new THREE.IcosahedronGeometry(5.8, 2);
-        const coreMat = new THREE.MeshPhongMaterial({
-            color: 0x050a10,
-            flatShading: true,
-            transparent: true,
-            opacity: 0.9
-        });
-        const innerGlobe = new THREE.Mesh(coreGeo, coreMat);
-        globe.add(innerGlobe);
+        const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+        scene.add(coreMesh);
 
-        // Inner Glowing Heart
-        const heartGeo = new THREE.IcosahedronGeometry(2, 1);
-        const heartMat = new THREE.MeshBasicMaterial({
-            color: THEME.safe.hex,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.6
-        });
-        const heart = new THREE.Mesh(heartGeo, heartMat);
-        globe.add(heart);
+        // Add a solid inner core
+        const innerGeo = new THREE.IcosahedronGeometry(3.5, 4);
+        const innerMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+        scene.add(innerMesh);
 
-        // --- PARTICLES ---
-        const pCount = 3000;
-        const pGeo = new THREE.BufferGeometry();
-        const pPos = new Float32Array(pCount * 3);
-        const pSpeeds = new Float32Array(pCount);
+        // Surrounding particles representing active sensors
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 200; // Will be updated to actual sensor count
+        let posArray = new Float32Array(particlesCount * 3);
+        let colorArray = new Float32Array(particlesCount * 3);
 
-        for (let i = 0; i < pCount; i++) {
-            // Random points in a sphere shell
-            const r = 8 + Math.random() * 20;
+        for (let i = 0; i < particlesCount * 3; i += 3) {
+            // Random sphere points
+            const r = 8 + Math.random() * 5;
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos((Math.random() * 2) - 1);
 
-            pPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-            pPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-            pPos[i * 3 + 2] = r * Math.cos(phi);
+            posArray[i] = r * Math.sin(phi) * Math.cos(theta);
+            posArray[i + 1] = r * Math.sin(phi) * Math.sin(theta);
+            posArray[i + 2] = r * Math.cos(phi);
 
-            pSpeeds[i] = 0.01 + Math.random() * 0.03;
+            colorArray[i] = 1; colorArray[i + 1] = 1; colorArray[i + 2] = 1;
         }
 
-        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-        pGeo.setAttribute('speed', new THREE.BufferAttribute(pSpeeds, 1));
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
-        const stringColor = new THREE.Color(THEME.safe.hex);
-        const pMat = new THREE.PointsMaterial({
-            color: stringColor,
-            size: 0.08,
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.1,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
             transparent: true,
-            opacity: 0.6,
-            blending: THREE.AdditiveBlending
+            opacity: 0.6
         });
-        const particles = new THREE.Points(pGeo, pMat);
-        scene.add(particles);
 
-        // Resize handler
-        window.addEventListener('resize', () => {
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+
+        // ==========================================================
+        // DATA FETCHING & UI LOGIC
+        // ==========================================================
+        async function fetchDustboyData() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('Network response was not ok');
+                // The API actually returns an array of station objects at the root or under a key
+                // Let's assume the root is an array based on typical structure, or handle object
+                const data = await response.json();
+
+                // Process data
+                let rawStations = Array.isArray(data) ? data : (data.data || []);
+
+                // Filter invalid and parse
+                appState.stations = rawStations.filter(st => st.pm25 != null).map(st => ({
+                    id: st.dustboy_id,
+                    name: st.dustboy_name_en || st.dustboy_name,
+                    province: st.province_en || st.province,
+                    pm25: parseFloat(st.pm25),
+                    time: st.log_datetime
+                }));
+
+                processData();
+                updateUI();
+
+                // Hide loader
+                document.getElementById('loader').style.opacity = '0';
+                setTimeout(() => document.getElementById('loader').style.display = 'none', 1000);
+
+            } catch (error) {
+                console.error("Failed to fetch Dustboy data:", error);
+                document.getElementById('loader-text').innerText = "CONNECTION FAILED. RETRYING...";
+                setTimeout(fetchDustboyData, 5000);
+            }
+        }
+
+        function processData() {
+            if (appState.stations.length === 0) return;
+
+            let totalPm25 = 0;
+            appState.maxPm25 = 0;
+
+            appState.stations.forEach(st => {
+                totalPm25 += st.pm25;
+                if (st.pm25 > appState.maxPm25) appState.maxPm25 = st.pm25;
+
+                // Assign category color for list rendering
+                st.category = getAqiCategory(st.pm25);
+            });
+
+            appState.avgPm25 = totalPm25 / appState.stations.length;
+            appState.currentAqiCategory = getAqiCategory(appState.avgPm25);
+
+            // Map PM2.5 to visual deformation (0 to ~3.0)
+            // Normal (25) = low deformation 0.2
+            // High (150+) = high deformation 3.0
+            appState.targetDeformation = Math.max(0.2, (appState.avgPm25 / 150) * 3.0);
+
+            // Update particles count to match sensors (up to 1000)
+            updateParticles();
+        }
+
+        function updateParticles() {
+            const count = Math.min(appState.stations.length, 1000);
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            const colorObj = new THREE.Color();
+
+            for (let i = 0; i < count; i++) {
+                const st = appState.stations[i];
+
+                const r = 8 + (st.pm25 / appState.maxPm25) * 6; // Distance based on severity
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+
+                colorObj.set(st.category.hex);
+                colors[i * 3] = colorObj.r;
+                colors[i * 3 + 1] = colorObj.g;
+                colors[i * 3 + 2] = colorObj.b;
+            }
+
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        }
+
+        function updateUI() {
+            // Update CSS variables for themed glow
+            document.documentElement.style.setProperty('--current-aqi-color', appState.currentAqiCategory.hex);
+            document.documentElement.style.setProperty('--current-aqi-color-rgb', appState.currentAqiCategory.rgb);
+
+            // Update texts
+            document.getElementById('avg-pm25').innerText = appState.avgPm25.toFixed(1);
+            document.getElementById('air-quality-desc').innerText = `GLOBAL STATUS: ${appState.currentAqiCategory.desc}`;
+            document.getElementById('total-sensors').innerText = appState.stations.length;
+
+            if (appState.stations.length > 0) {
+                const timeSt = new Date(appState.stations[0].time);
+                if (!isNaN(timeSt)) {
+                    document.getElementById('last-update').innerText = `SYS.TIME ${timeSt.toLocaleTimeString()}`;
+                }
+            }
+
+            renderStationsList();
+        }
+
+        function renderStationsList() {
+            const container = document.getElementById('stations-container');
+            container.innerHTML = '';
+
+            // Sort
+            const sorted = [...appState.stations].sort((a, b) => {
+                return appState.sortDesc ? b.pm25 - a.pm25 : a.pm25 - b.pm25;
+            });
+
+            // Render top 50 to avoid DOM lag
+            const toRender = sorted.slice(0, 50);
+
+            toRender.forEach(st => {
+                const div = document.createElement('div');
+                div.className = 'station-item';
+                div.style.borderLeftColor = st.category.hex;
+
+                div.innerHTML = `
+                    <div class="st-info">
+                        <span class="st-name">${st.name || 'Unknown Node'}</span>
+                        <span class="st-prov">${st.province || 'Unknown Sector'}</span>
+                    </div>
+                    <div class="st-val" style="color: ${st.category.hex}">${st.pm25}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Setup Events
+        document.getElementById('sort-toggle').addEventListener('click', (e) => {
+            appState.sortDesc = !appState.sortDesc;
+            e.target.innerText = appState.sortDesc ? 'SORT: HIGHEST' : 'SORT: LOWEST';
+            renderStationsList();
+        });
+
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-        // Current Target Colors for Lerping
-        let currentGlobeColor = new THREE.Color(THEME.safe.hex);
-        let targetGlobeColor = new THREE.Color(THEME.safe.hex);
+        // ==========================================================
+        // ANIMATION LOOP
+        // ==========================================================
+        const clock = new THREE.Clock();
+        const defVelocity = { v: 0 }; // Velocity object required for CdsTween mutability simulation
+        const targetColor = new THREE.Color();
+        const currentColor = new THREE.Color(COLORS.GOOD.hex);
 
         function animate() {
             requestAnimationFrame(animate);
 
+            const delta = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+
             controls.update();
 
-            // Rotations
-            globe.rotation.y += 0.002;
-            globe.rotation.x += 0.001;
-            heart.rotation.y -= 0.005;
-            heart.rotation.z -= 0.003;
-            particles.rotation.y -= 0.001;
+            // Smoothly interpolate deformation using KlakMath CdsTween concept
+            appState.currentDeformation = stepCds(
+                appState.currentDeformation,
+                appState.targetDeformation,
+                defVelocity,
+                0.8, // duration
+                delta
+            );
 
-            // Breathing / Pulsing Effect based on Highest PM2.5
-            const baseScale = 1;
-            const pmScaleFactor = Math.min(globalStats.maxPm25 / 150, 1.0); // Normalize 0-1
+            // Update Shader uniforms
+            coreMaterial.uniforms.uTime.value = elapsedTime;
+            coreMaterial.uniforms.uDeformationAmount.value = appState.currentDeformation;
 
-            // Heart beats faster if danger
-            const beatSpeed = 0.002 + (pmScaleFactor * 0.01);
-            const pulse = Math.sin(Date.now() * beatSpeed) * (0.05 + pmScaleFactor * 0.1);
+            // Pulse speed increases with severity
+            coreMaterial.uniforms.uPulseSpeed.value = 1.0 + appState.currentDeformation;
 
-            const targetScale = baseScale + (pmScaleFactor * 0.2) + pulse;
+            // Smooth color transition
+            targetColor.set(appState.currentAqiCategory.hex);
+            currentColor.lerp(targetColor, delta * 2.0);
+            coreMaterial.uniforms.uColor.value.copy(currentColor);
 
-            globe.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+            // Rotate particle field slowly
+            particlesMesh.rotation.y = elapsedTime * 0.05;
+            particlesMesh.rotation.z = elapsedTime * 0.02;
 
-            // Color Lerping
-            targetGlobeColor.setHex(getQuality(globalStats.maxPm25).hex);
-            currentGlobeColor.lerp(targetGlobeColor, 0.05);
+            // Rotate Inner Core counter
+            innerMesh.rotation.y = -elapsedTime * 0.2;
+            innerMesh.rotation.x = elapsedTime * 0.1;
 
-            globeMat.color.copy(currentGlobeColor);
-            globeMat.emissive.copy(currentGlobeColor);
-            heartMat.color.copy(currentGlobeColor);
-            pMat.color.copy(currentGlobeColor);
+            // Update Bloom strength depending on deformation
+            bloomPass.strength = 1.5 + (appState.currentDeformation * 0.5);
 
-            renderer.render(scene, camera);
+            composer.render();
         }
 
+        // Init
+        fetchDustboyData();
         animate();
 
-        // ============================================
-        // 3. REST API CONNECTIVITY (POLLING)
-        // ============================================
-        const statusDot = document.getElementById('conn-dot');
-        const statusText = document.getElementById('conn-status');
-        const loader = document.getElementById('loader');
-
-        async function fetchDustboyAPI() {
-            try {
-                statusText.innerText = "SYNCING DATA...";
-                statusText.style.color = "var(--warn)";
-
-                // Fetch the REST JSON endpoint
-                const response = await fetch('https://open-api.cmuccdc.org/aqic/dustboy');
-                if (!response.ok) throw new Error('Network Issue');
-                const data = await response.json();
-
-                // Clear state
-                stationsMap.clear();
-                feedWrapper.innerHTML = '';
-
-                let total = 0;
-                let highest = 0;
-                let hName = 'None';
-
-                // Process the raw data array
-                data.forEach(station => {
-                    const v_pm25 = Math.round(parseFloat(station.pm25)) || 0;
-                    if (v_pm25 <= 0 || v_pm25 > 1000) return; // Filter anomalies
-
-                    const nameTh = station.dustboy_name || station.dustboy_name_en || station.dustboy_id || "UNKNOWN";
-                    const id = station.dustboy_id || station.id;
-
-                    stationsMap.set(id, { name: nameTh, pm25: v_pm25 });
-
-                    total += v_pm25;
-                    if (v_pm25 > highest) {
-                        highest = v_pm25;
-                        hName = nameTh;
-                    }
-                });
-
-                globalStats.count = stationsMap.size;
-                globalStats.maxPm25 = highest;
-                globalStats.maxLoc = hName;
-                globalStats.avgPm25 = Math.round(total / globalStats.count) || 0;
-
-                // Update Numeric UI
-                maxValEl.innerText = globalStats.maxPm25;
-                maxLocEl.innerText = globalStats.maxLoc;
-                avgValEl.innerText = globalStats.avgPm25;
-                nodesValEl.innerText = globalStats.count;
-
-                const maxQ = getQuality(globalStats.maxPm25);
-                document.getElementById('card-max').style.borderColor = maxQ.css;
-                maxValEl.style.color = maxQ.css;
-                maxValEl.style.textShadow = `0 0 10px ${maxQ.css}`;
-
-                const avgQ = getQuality(globalStats.avgPm25);
-                bannerEl.innerHTML = `NETWORK STATUS: <span style="color:${avgQ.css}; font-weight:bold;">${avgQ.label}</span>`;
-                bannerEl.style.borderLeftColor = avgQ.css;
-                bannerEl.style.background = `rgba(${avgQ === THEME.safe ? '0,255,245' : avgQ === THEME.warn ? '255,234,0' : '255,42,42'}, 0.1)`;
-
-                // Render Top 8 Dangerous Nodes in the Live Feed
-                const sortedStations = Array.from(stationsMap.values()).sort((a, b) => b.pm25 - a.pm25).slice(0, 8);
-                sortedStations.forEach(station => {
-                    appendFeedItem(station.name, station.pm25, getQuality(station.pm25));
-                });
-
-                // Set Success State
-                statusDot.classList.add('active');
-                statusDot.style.background = 'var(--safe)';
-                statusDot.style.boxShadow = '0 0 10px var(--safe)';
-                statusText.innerText = "API SYNC SECURED";
-                statusText.style.color = "var(--safe)";
-
-                // Hide Loader
-                if (loader.style.display !== 'none') {
-                    loader.style.opacity = '0';
-                    setTimeout(() => loader.style.display = 'none', 1000);
-                }
-
-            } catch (err) {
-                console.error("API Fetch Error:", err);
-                statusDot.classList.remove('active');
-                statusDot.style.background = 'var(--danger)';
-                statusDot.style.boxShadow = '0 0 10px var(--danger)';
-                statusText.innerText = "SYNC FAILED. RETRYING...";
-                statusText.style.color = "var(--danger)";
-            }
-        }
-
-        // Initial fetch, then poll every 60 seconds
-        fetchDustboyAPI();
-        setInterval(fetchDustboyAPI, 60000);
+        // Refresh every 5 minutes
+        setInterval(fetchDustboyData, 5 * 60 * 1000);
 
     </script>
 </body>
